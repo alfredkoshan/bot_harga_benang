@@ -3,8 +3,21 @@ from bs4 import BeautifulSoup
 import re
 import time
 import os
+import threading
+from flask import Flask
 
-# Ambil konfigurasi dari Environment Variables agar aman
+# --- WEB SERVER SEDERHANA AGAR GRATIS DI RENDER ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot Monitor Harga Aktif!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# --- KONFIGURASI BOT ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID_TUJUAN = os.getenv("CHAT_ID_TUJUAN")
 
@@ -22,14 +35,12 @@ def fetch_price(url):
         res = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # Cari angka harga di HTML SunSirs
         price_tag = soup.find('span', {'class': 'price'}) or soup.find('td', {'class': 'gp-price'})
         if price_tag:
             clean_price = re.sub(r'[^\d.]', '', price_tag.text.strip())
             if clean_price:
                 return float(clean_price)
                 
-        # Cadangan pencarian
         text_content = soup.get_text()
         match = re.search(r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:RMB|USD|\/Ton)', text_content)
         if match:
@@ -66,9 +77,15 @@ def run_check():
     send_telegram_message(msg)
     print("Notifikasi berhasil dikirim ke Telegram!")
 
-if __name__ == "__main__":
+def bot_loop():
     print("Bot monitor aktif dan berjalan...")
     while True:
         run_check()
         print(f"Menunggu {INTERVAL_DETIK} detik (24 jam) untuk pengecekan berikutnya...")
         time.sleep(INTERVAL_DETIK)
+
+if __name__ == "__main__":
+    # Jalankan loop bot di background thread
+    threading.Thread(target=bot_loop, daemon=True).start()
+    # Jalankan web server Flask
+    run_flask()
